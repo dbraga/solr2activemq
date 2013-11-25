@@ -48,9 +48,9 @@ public class SolrToActiveMQComponent extends SearchComponent {
 
   private static ObjectMapper mapper = new ObjectMapper();
 
-  private static final int BUFFER_SIZE = 2;
-  private static final int BUFFER_DEQUEUING_POLLING = 5000;
-  private static final int CHECK_ACTIVEMQ__POLLING = 5000;
+  private static int BUFFER_SIZE;
+  private static int BUFFER_DEQUEUING_POLLING;
+  private static int CHECK_ACTIVEMQ__POLLING;
 
 
   private static Timer dequeuingTimer = new Timer("dequeuingTimer", true);
@@ -151,6 +151,11 @@ public class SolrToActiveMQComponent extends SearchComponent {
     SOLR_POOLNAME = initArgs.get("solr-poolname", "default");
     SOLR_CORENAME = initArgs.get("solr-corename", "collection");
 
+    // Solr2ActiveMQ configuration
+    BUFFER_SIZE = initArgs.getInt("solr2activemq-buffer-size", 1000);
+    BUFFER_DEQUEUING_POLLING = initArgs.getInt("solr2activemq-dequeuing-buffer-polling", 500);
+    CHECK_ACTIVEMQ__POLLING = initArgs.getInt("solr2activemq-check-activemq-polling", 5000);
+
     System.out.println("SolrToActiveMQComponent: loaded configuration:" +
             "\n\tACTIVEMQ_BROKER_URI: " + ACTIVEMQ_BROKER_URI +
             "\n\tACTIVEMQ_BROKER_PORT: " + ACTIVEMQ_BROKER_PORT +
@@ -159,7 +164,10 @@ public class SolrToActiveMQComponent extends SearchComponent {
             "\n\tSOLR_HOSTNAME: " + SOLR_HOSTNAME +
             "\n\tSOLR_PORT: " + SOLR_PORT +
             "\n\tSOLR_POOLNAME: " + SOLR_POOLNAME +
-            "\n\tSOLR_CORENAME: " + SOLR_CORENAME
+            "\n\tSOLR_CORENAME: " + SOLR_CORENAME +
+            "\n\tBUFFER_SIZE: " + BUFFER_SIZE +
+            "\n\tBUFFER_DEQUEUING_POLLING: " + BUFFER_DEQUEUING_POLLING +
+            "\n\tCHECK_ACTIVEMQ__POLLING: " + CHECK_ACTIVEMQ__POLLING
     );
 
     circularFifoBuffer = new CircularFifoBuffer(BUFFER_SIZE);
