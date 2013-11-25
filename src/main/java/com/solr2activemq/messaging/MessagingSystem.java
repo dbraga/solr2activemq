@@ -18,7 +18,7 @@ public class MessagingSystem {
   private MessageProducer producer;
 
   public MessagingSystem(String uri, int port){
-    this.connectionFactory =  new ActiveMQConnectionFactory("tcp://" + uri + ":" + port);
+    this.connectionFactory =  new ActiveMQConnectionFactory("failover:(tcp://"+ uri + ":" + port+")");
   }
 
   public MessagingSystem(ActiveMQConnectionFactory connectionFactory){
