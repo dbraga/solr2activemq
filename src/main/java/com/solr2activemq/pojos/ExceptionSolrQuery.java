@@ -12,6 +12,11 @@ public class ExceptionSolrQuery extends SolrQuery{
     this.stackTrace = stackTrace;
   }
 
+  public ExceptionSolrQuery(SolrQuery solrQuery, String stackTrace){
+    super(solrQuery.getParams(),solrQuery.getHits(),solrQuery.getQtime(), solrQuery.getPath(),solrQuery.getWebapp());
+    this.stackTrace = stackTrace;
+  }
+
   public String getStackTrace() {
     return stackTrace;
   }
