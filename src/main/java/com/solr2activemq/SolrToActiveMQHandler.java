@@ -23,7 +23,7 @@ public class SolrToActiveMQHandler extends SearchHandler {
       List<SearchComponent> singleComponent = Arrays.asList(solrToActiveMQComponent);
       rsp.setException(e);
       ResponseBuilder rb = new ResponseBuilder(req, rsp, singleComponent);
-      solrToActiveMQComponent.prepare(rb);
+      solrToActiveMQComponent.process(rb);
       // Finally throw the exception
       throw e;
     }
