@@ -1,7 +1,7 @@
 # Solr 2 ActiveMQ
-An Apache Solr Handler capable of sending queries to an Apache ActiveMQ broker
+An Apache Solr Handler and compoment capable of sending queries to an Apache ActiveMQ broker
 ## Requirements
-* Apache Solr 3.6.2 [i will soon create profiles to switch between versions]
+* Apache Solr 3.6.2 [different versions will be supported soon ..]
 * ActiveMQ broker
 * Maven (>=2)
 
@@ -10,18 +10,29 @@ An Apache Solr Handler capable of sending queries to an Apache ActiveMQ broker
 
 Move the solr2activemq-{version}-jar-with-dependencies.jar to your {SOLR_HOME}/lib folder
 
-## Configuration
-Configuration is pretty easy, you just need to add the configuration line to your solrconfig.xml
-```
-<solrToActiveMQConfig activeMQBrokerUri="localhost" activeMQBrokerPort="61616" activeMQBrokerDestinationType="queue" activeMQBrokerDestinationName="test_queue" solrHostname="localhost" solrPort="8983" solrPoolname="default" solrCorename="collection"/>
-```  
-Don't forget to link the handler to a requestHandler in the solrconfig.xml, e.g:
-
+## Set up - solrconfig.xml
+1. Enable the handler, e.g: for the request handler "/select"
 ```
 <requestHandler name="/select" class="com.solr2activemq.SolrToActiveMQHandler">
 ```
-## Oh my! But what about the default SearchHandler?
-Good news: SolrToActiveMQHandler extends SearchHandler!
+2. Configure the component. This is the default configuration
+```
+<searchComponent name="solr2activemq"  	  class="com.solr2activemq.SolrToActiveMQComponent" >
+    <str name="activemq-broker-uri">localhost</str>
+    <int name="activemq-broker-port">61616</int>
+    <str name="activemq-broker-destination-type">queue</str>
+    <str name="activemq-broker-destination-name">test-queue</str>
+
+    <str name="solr-hostname">localhost</str>
+    <int name="solr-port">8983</int>
+    <str name="solr-poolname">default</str>
+    <str name="solr-corename">collection</str>
+
+    <int name="solr2activemq-buffer-size">1000</int>
+    <int name="solr2activemq-dequeuing-buffer-polling">500</int>
+    <int name="solr2activemq-check-activemq-polling">5000</int>
+</searchComponent>
+```
 
 ## Contributing
 1. Fork it
