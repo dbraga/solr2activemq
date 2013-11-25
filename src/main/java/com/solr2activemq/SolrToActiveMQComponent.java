@@ -5,6 +5,7 @@ import com.solr2activemq.pojos.ExceptionSolrQuery;
 import com.solr2activemq.pojos.SolrQuery;
 import org.apache.commons.collections.buffer.CircularFifoBuffer;
 import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.handler.component.ResponseBuilder;
@@ -16,9 +17,13 @@ import org.codehaus.jackson.map.ObjectMapper;
 import javax.jms.JMSException;
 import javax.jms.TextMessage;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.locks.ReentrantLock;
+
+import static org.apache.solr.util.SolrPluginUtils.docListToSolrDocumentList;
 
 /**
  * User: dbraga - Date: 11/22/13
@@ -165,17 +170,22 @@ public class SolrToActiveMQComponent extends SearchComponent {
 
 
   @Override
-  public void prepare(ResponseBuilder rb) throws IOException {
+  public void prepare(ResponseBuilder rb) throws IOException {}
+
+  @Override
+  public void process(ResponseBuilder rb) throws IOException {
     SolrQueryResponse rsp = rb.rsp;
     SolrQueryRequest req = rb.req;
 
     TextMessage message;
 
     try {
+      SolrDocumentList solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(),  new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
+
       // Fetch information about the solr query
       SolrQuery solrQuery = new SolrQuery(
               (rsp.getToLog().get("params") == null ) ? "" : (String)rsp.getToLog().get("params"),
-              (rsp.getToLog().get("hits") == null )? 0 : (Integer)rsp.getToLog().get("hits"),
+              (int) solrDocumentList.getNumFound(),
               rsp.getEndTime()-req.getStartTime(),
               (rsp.getToLog().get("path") == null ) ? "" : (String)rsp.getToLog().get("path"),
               (rsp.getToLog().get("webapp") == null ) ? "" :(String)rsp.getToLog().get("webapp")
@@ -192,10 +202,8 @@ public class SolrToActiveMQComponent extends SearchComponent {
     } catch (JMSException e){
       e.printStackTrace();
     }
-  }
 
-  @Override
-  public void process(ResponseBuilder rb) throws IOException {}
+  }
 
   @Override
   public String getDescription() {
