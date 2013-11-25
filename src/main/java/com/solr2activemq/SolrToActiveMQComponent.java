@@ -176,16 +176,18 @@ public class SolrToActiveMQComponent extends SearchComponent {
   public void process(ResponseBuilder rb) throws IOException {
     SolrQueryResponse rsp = rb.rsp;
     SolrQueryRequest req = rb.req;
-
+    SolrDocumentList solrDocumentList = null;
     TextMessage message;
 
     try {
-      SolrDocumentList solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(),  new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
+      if (rb.rsp.getException() == null) { // response did not generate an exception
+        solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(),  new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
+      }
 
       // Fetch information about the solr query
       SolrQuery solrQuery = new SolrQuery(
               (rsp.getToLog().get("params") == null ) ? "" : (String)rsp.getToLog().get("params"),
-              (int) solrDocumentList.getNumFound(),
+              (solrDocumentList == null ) ? 0 : (int) solrDocumentList.getNumFound(),
               rsp.getEndTime()-req.getStartTime(),
               (rsp.getToLog().get("path") == null ) ? "" : (String)rsp.getToLog().get("path"),
               (rsp.getToLog().get("webapp") == null ) ? "" :(String)rsp.getToLog().get("webapp")
