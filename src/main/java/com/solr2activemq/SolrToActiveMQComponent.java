@@ -3,6 +3,7 @@ package com.solr2activemq;
 import com.solr2activemq.messaging.MessagingSystem;
 import com.solr2activemq.pojos.ExceptionSolrQuery;
 import com.solr2activemq.pojos.SolrQuery;
+import org.apache.commons.collections.BufferUnderflowException;
 import org.apache.commons.collections.buffer.CircularFifoBuffer;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.solr.common.SolrDocumentList;
@@ -21,6 +22,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static org.apache.solr.util.SolrPluginUtils.docListToSolrDocumentList;
@@ -49,13 +52,15 @@ public class SolrToActiveMQComponent extends SearchComponent {
   private static ObjectMapper mapper = new ObjectMapper();
 
   private static int BUFFER_SIZE;
-  private static int BUFFER_DEQUEUING_POLLING;
   private static int CHECK_ACTIVEMQ__POLLING;
+  private static int DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE;
 
 
   private static Timer dequeuingTimer = new Timer("dequeuingTimer", true);
   private static Timer checkActiveMQTimer = new Timer("checkActiveMQTimer", true);
+
   private ReentrantLock lockObj = new ReentrantLock( );
+
   private static CircularFifoBuffer circularFifoBuffer;
 
 
@@ -98,26 +103,55 @@ public class SolrToActiveMQComponent extends SearchComponent {
   /**
    * Dequeue all messages in the buffer if not empty and enqueue them to the activeMQ destination
    */
-  class DequeueFromBuffer extends TimerTask {
+  class DequeueFromBuffer extends Thread{
     @Override
     public void run() {
-      // Wake up and dequeue a message from the buffer
-      if (!circularFifoBuffer.isEmpty() && !lockObj.isLocked() && !needsBootstrap){
-        try{
-          lockObj.lock();
-          while(!circularFifoBuffer.isEmpty()) {
-            messagingSystem.sendMessage((TextMessage) circularFifoBuffer.remove());
+      TextMessage message = null;
+      while(true){
+        synchronized (circularFifoBuffer){
+          try{
+            System.out.println("Thread: " + this.getName()+ " waiting..");
+            circularFifoBuffer.wait();
+            System.out.println("Thread: " + this.getName()+ " woke up..");
+            if (!circularFifoBuffer.isEmpty() // Spurious wakeups
+                    && !needsBootstrap){ // Dequeing from the buffer only if i can send the message right after
+
+              message = (TextMessage) circularFifoBuffer.remove();
+            }
           }
-        } catch (JMSException e){
-         // session or connection lost
-          needsBootstrap = true;
+          catch (InterruptedException e) {}
+          catch (BufferUnderflowException e) {}
         }
-        finally {
-           lockObj.unlock();
+        if (!needsBootstrap){
+          try {
+            System.out.println("Thread: " + this.getName()+ " sending message");
+            messagingSystem.sendMessage(message);
+          } catch (JMSException e) {
+            // session or connection lost
+            needsBootstrap = true;
+          }
         }
-      }
+
+      //
+      //
+      //// Wake up and dequeue a message from the buffer
+      //if (!circularFifoBuffer.isEmpty() && !lockObj.isLocked() && !needsBootstrap){
+      //  try{
+      //    lockObj.lock();
+      //    while(!circularFifoBuffer.isEmpty()) {
+      //      messagingSystem.sendMessage((TextMessage) circularFifoBuffer.remove());
+      //    }
+      //  } catch (JMSException e){
+      //   // session or connection lost
+      //    needsBootstrap = true;
+      //  }
+      //  finally {
+      //     lockObj.unlock();
+      //  }
+      //}
     }
   }
+}
 
   /**
    * Check if activeMQ connection or session needs bootstrap
@@ -153,7 +187,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
 
     // Solr2ActiveMQ configuration
     BUFFER_SIZE = initArgs.getInt("solr2activemq-buffer-size", 1000);
-    BUFFER_DEQUEUING_POLLING = initArgs.getInt("solr2activemq-dequeuing-buffer-polling", 500);
+    DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE = initArgs.getInt("solr2activemq-dequeuing-from-buffer-pool-size", 4);
     CHECK_ACTIVEMQ__POLLING = initArgs.getInt("solr2activemq-check-activemq-polling", 5000);
 
     System.out.println("SolrToActiveMQComponent: loaded configuration:" +
@@ -166,13 +200,20 @@ public class SolrToActiveMQComponent extends SearchComponent {
             "\n\tSOLR_POOLNAME: " + SOLR_POOLNAME +
             "\n\tSOLR_CORENAME: " + SOLR_CORENAME +
             "\n\tBUFFER_SIZE: " + BUFFER_SIZE +
-            "\n\tBUFFER_DEQUEUING_POLLING: " + BUFFER_DEQUEUING_POLLING +
+            "\n\tDEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE: " + DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE +
             "\n\tCHECK_ACTIVEMQ__POLLING: " + CHECK_ACTIVEMQ__POLLING
     );
 
     circularFifoBuffer = new CircularFifoBuffer(BUFFER_SIZE);
     bootstrapMessagingSystem();
-    dequeuingTimer.schedule(new DequeueFromBuffer(), 0, BUFFER_DEQUEUING_POLLING);
+    ExecutorService pool = Executors.newFixedThreadPool(4);
+    for (int i=0;i< DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE;i++){
+      pool.submit(new DequeueFromBuffer());
+    }
+
+    pool.shutdown();
+
+
     checkActiveMQTimer.schedule(new CheckIfActiveMQNeedsBootstrap(), 0, CHECK_ACTIVEMQ__POLLING);
   }
 
@@ -208,7 +249,11 @@ public class SolrToActiveMQComponent extends SearchComponent {
         message = addMessageProperties(messagingSystem.getSession().createTextMessage(mapper.writeValueAsString(exceptionSolrQuery)), EXCEPTION);
       }
       // Add the message to the buffer
-      circularFifoBuffer.add(message);
+      synchronized(circularFifoBuffer){
+        circularFifoBuffer.add(message);
+        circularFifoBuffer.notify();
+
+      }
     } catch (JMSException e){
       e.printStackTrace();
     }
