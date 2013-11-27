@@ -35,7 +35,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
   private SolrParams initArgs;
 
   private static MessagingSystem messagingSystem;
-  private boolean needsBootstrap = true;
+  //private boolean needsBootstrap = true;
 
   private static String ACTIVEMQ_BROKER_URI;
   private static int ACTIVEMQ_BROKER_PORT;
@@ -92,11 +92,11 @@ public class SolrToActiveMQComponent extends SearchComponent {
       messagingSystem.createDestination(ACTIVEMQ_DESTINATION_NAME);
       messagingSystem.createProducer();
       System.out.println("SolrToActiveMQComponent: Bootstrapping messaging system done.");
-      needsBootstrap = false;
+      messagingSystem.validateConnection();
     }
     catch (JMSException e){
       System.out.println("SolrToActiveMQComponent: Bootstrapping messaging system failed.\n" + e);
-      needsBootstrap = true;
+      messagingSystem.invalidateConnection();
     }
   }
 
@@ -109,46 +109,28 @@ public class SolrToActiveMQComponent extends SearchComponent {
       TextMessage message = null;
       while(true){
         synchronized (circularFifoBuffer){
-          try{
-            System.out.println("Thread: " + this.getName()+ " waiting..");
-            circularFifoBuffer.wait();
-            System.out.println("Thread: " + this.getName()+ " woke up..");
-            if (!circularFifoBuffer.isEmpty() // Spurious wakeups
-                    && !needsBootstrap){ // Dequeing from the buffer only if i can send the message right after
-
+          try {
+            System.out.println("Thread: " + this.getName() + " waiting..");
+            while (circularFifoBuffer.isEmpty()) {
+              circularFifoBuffer.wait();
+            }
+            System.out.println("Thread: " + this.getName() + " woke up..");
+            if (messagingSystem.isValidConnection()) { // Dequeing from the buffer only if i can send the message right after
               message = (TextMessage) circularFifoBuffer.remove();
             }
           }
           catch (InterruptedException e) {}
           catch (BufferUnderflowException e) {}
         }
-        if (!needsBootstrap){
+        if (messagingSystem.isValidConnection()){
           try {
             System.out.println("Thread: " + this.getName()+ " sending message");
             messagingSystem.sendMessage(message);
           } catch (JMSException e) {
             // session or connection lost
-            needsBootstrap = true;
+            messagingSystem.invalidateConnection();
           }
         }
-
-      //
-      //
-      //// Wake up and dequeue a message from the buffer
-      //if (!circularFifoBuffer.isEmpty() && !lockObj.isLocked() && !needsBootstrap){
-      //  try{
-      //    lockObj.lock();
-      //    while(!circularFifoBuffer.isEmpty()) {
-      //      messagingSystem.sendMessage((TextMessage) circularFifoBuffer.remove());
-      //    }
-      //  } catch (JMSException e){
-      //   // session or connection lost
-      //    needsBootstrap = true;
-      //  }
-      //  finally {
-      //     lockObj.unlock();
-      //  }
-      //}
     }
   }
 }
@@ -160,7 +142,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
     @Override
     public void run() {
       // Wake up and check if activeMQ connection needs to be bootstrapped
-      if (needsBootstrap){
+      if (!messagingSystem.isValidConnection()){
         bootstrapMessagingSystem();
       }
     }
@@ -208,7 +190,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
     bootstrapMessagingSystem();
     ExecutorService pool = Executors.newFixedThreadPool(4);
     for (int i=0;i< DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE;i++){
-      pool.submit(new DequeueFromBuffer());
+      pool.submit(new DequeueFromBuffer(),false);
     }
 
     pool.shutdown();
