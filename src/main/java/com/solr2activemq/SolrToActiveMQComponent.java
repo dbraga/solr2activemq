@@ -24,7 +24,6 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static org.apache.solr.util.SolrPluginUtils.docListToSolrDocumentList;
 
@@ -55,11 +54,8 @@ public class SolrToActiveMQComponent extends SearchComponent {
   private static int CHECK_ACTIVEMQ__POLLING;
   private static int DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE;
 
-
-  private static Timer dequeuingTimer = new Timer("dequeuingTimer", true);
   private static Timer checkActiveMQTimer = new Timer("checkActiveMQTimer", true);
 
-  private ReentrantLock lockObj = new ReentrantLock( );
 
   private static CircularFifoBuffer circularFifoBuffer;
 
@@ -110,11 +106,10 @@ public class SolrToActiveMQComponent extends SearchComponent {
       while(true){
         synchronized (circularFifoBuffer){
           try {
-            System.out.println("Thread: " + this.getName() + " waiting..");
             while (circularFifoBuffer.isEmpty()) {
               circularFifoBuffer.wait();
             }
-            System.out.println("Thread: " + this.getName() + " woke up..");
+            if (circularFifoBuffer.size() > 1000) System.out.println("Size of circular fifo buffer is :" + circularFifoBuffer.size());
             if (messagingSystem.isValidConnection()) { // Dequeing from the buffer only if i can send the message right after
               message = (TextMessage) circularFifoBuffer.remove();
             }
@@ -124,7 +119,6 @@ public class SolrToActiveMQComponent extends SearchComponent {
         }
         if (messagingSystem.isValidConnection()){
           try {
-            System.out.println("Thread: " + this.getName()+ " sending message");
             messagingSystem.sendMessage(message);
           } catch (JMSException e) {
             // session or connection lost
@@ -168,7 +162,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
     SOLR_CORENAME = initArgs.get("solr-corename", "collection");
 
     // Solr2ActiveMQ configuration
-    BUFFER_SIZE = initArgs.getInt("solr2activemq-buffer-size", 1000);
+    BUFFER_SIZE = initArgs.getInt("solr2activemq-buffer-size", 10000);
     DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE = initArgs.getInt("solr2activemq-dequeuing-from-buffer-pool-size", 4);
     CHECK_ACTIVEMQ__POLLING = initArgs.getInt("solr2activemq-check-activemq-polling", 5000);
 
