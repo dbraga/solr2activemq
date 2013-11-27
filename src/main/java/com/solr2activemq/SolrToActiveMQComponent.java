@@ -2,6 +2,7 @@ package com.solr2activemq;
 
 import com.solr2activemq.messaging.MessagingSystem;
 import com.solr2activemq.pojos.ExceptionSolrQuery;
+import com.solr2activemq.pojos.Message;
 import com.solr2activemq.pojos.SolrQuery;
 import org.apache.commons.collections.BufferUnderflowException;
 import org.apache.commons.collections.buffer.CircularFifoBuffer;
@@ -34,8 +35,6 @@ public class SolrToActiveMQComponent extends SearchComponent {
   private SolrParams initArgs;
 
   private static MessagingSystem messagingSystem;
-  //private boolean needsBootstrap = true;
-
   private static String ACTIVEMQ_BROKER_URI;
   private static int ACTIVEMQ_BROKER_PORT;
   private static String ACTIVEMQ_DESTINATION_TYPE;
@@ -44,11 +43,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
   private static int SOLR_PORT;
   private static String SOLR_POOLNAME;
   private static String SOLR_CORENAME;
-
-  private static final String EXCEPTION = "exception";
-  private static final String INFO = "info";
-
-  private static ObjectMapper mapper = new ObjectMapper();
+  protected static ObjectMapper mapper = new ObjectMapper();
 
   private static int BUFFER_SIZE;
   private static int CHECK_ACTIVEMQ__POLLING;
@@ -142,6 +137,44 @@ public class SolrToActiveMQComponent extends SearchComponent {
     }
   }
 
+  /**
+   * add a text message to the internal circular fifo buffer
+   *
+   * @param msg a text message
+   */
+  public static void addMessageToBuffer(TextMessage msg){
+    if (msg != null) {
+      // Add the message to the buffer
+      synchronized(circularFifoBuffer){
+        circularFifoBuffer.add(msg);
+        circularFifoBuffer.notify();
+      }
+    }
+  }
+
+  /**
+   * Create a text message from a pojo
+   *
+   * @param pojo representation of the message
+   * @return a text message
+   */
+  public static TextMessage createMessage(Object pojo){
+    TextMessage msg = null;
+    try {
+      if (pojo != null) {
+        msg = addMessageProperties(messagingSystem.getSession().createTextMessage(
+                mapper.writeValueAsString(pojo)),
+                ((Message)pojo).getMessageType()
+        );
+      }
+    } catch (Exception e){
+      messagingSystem.invalidateConnection();
+    }
+    finally {
+      return msg;
+    }
+  }
+
 
   @Override
   public void init( NamedList args )
@@ -197,6 +230,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
   @Override
   public void prepare(ResponseBuilder rb) throws IOException {}
 
+
   @Override
   public void process(ResponseBuilder rb) throws IOException {
     SolrQueryResponse rsp = rb.rsp;
@@ -204,36 +238,27 @@ public class SolrToActiveMQComponent extends SearchComponent {
     SolrDocumentList solrDocumentList = null;
     TextMessage message;
 
-    try {
-      if (rb.rsp.getException() == null) { // response did not generate an exception
-        solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(),  new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
-      }
 
-      // Fetch information about the solr query
-      SolrQuery solrQuery = new SolrQuery(
+    if (rb.rsp.getException() == null) { // response did not generate an exception
+        solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(),  new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
+    }
+
+    // Fetch information about the solr query
+    SolrQuery solrQuery = new SolrQuery(
               (rsp.getToLog().get("params") == null ) ? "" : (String)rsp.getToLog().get("params"),
               (solrDocumentList == null ) ? 0 : (int) solrDocumentList.getNumFound(),
               rsp.getEndTime()-req.getStartTime(),
               (rsp.getToLog().get("path") == null ) ? "" : (String)rsp.getToLog().get("path"),
               (rsp.getToLog().get("webapp") == null ) ? "" :(String)rsp.getToLog().get("webapp")
-      );
-      if (rb.rsp.getException() == null){
-        message = addMessageProperties(messagingSystem.getSession().createTextMessage(mapper.writeValueAsString(solrQuery)), INFO);
-      } else {
-        // The response generated an exception
-        ExceptionSolrQuery exceptionSolrQuery = new ExceptionSolrQuery(solrQuery, ExceptionUtils.getStackTrace(rb.rsp.getException()));
-        message = addMessageProperties(messagingSystem.getSession().createTextMessage(mapper.writeValueAsString(exceptionSolrQuery)), EXCEPTION);
-      }
-      // Add the message to the buffer
-      synchronized(circularFifoBuffer){
-        circularFifoBuffer.add(message);
-        circularFifoBuffer.notify();
-
-      }
-    } catch (JMSException e){
-      e.printStackTrace();
+    );
+    if (rb.rsp.getException() == null) { // response did not generate an exception
+      message = createMessage(solrQuery);
+    } else {
+      // The response generated an exception
+      ExceptionSolrQuery exceptionSolrQuery = new ExceptionSolrQuery(solrQuery, ExceptionUtils.getStackTrace(rb.rsp.getException()));
+      message = createMessage(exceptionSolrQuery);
     }
-
+    addMessageToBuffer(message);
   }
 
   @Override
