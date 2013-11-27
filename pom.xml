@@ -21,12 +21,6 @@
             <artifactId>solr-solrj</artifactId>
             <version>${solr.version}</version>
         </dependency>
-        <dependency>
-            <groupId>log4j</groupId>
-            <artifactId>log4j</artifactId>
-            <version>1.2.4</version>
-        </dependency>
-
         <!-- ActiveMQ -->
         <dependency>
             <groupId>org.apache.activemq</groupId>
