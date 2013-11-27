@@ -16,6 +16,7 @@ public class MessagingSystem {
   private Destination destination;
   private MessageConsumer consumer;
   private MessageProducer producer;
+  private boolean validConnection;
 
   public MessagingSystem(String uri, int port){
     this.connectionFactory =  new ActiveMQConnectionFactory("failover:(tcp://"+ uri + ":" + port+")");
@@ -23,6 +24,18 @@ public class MessagingSystem {
 
   public MessagingSystem(ActiveMQConnectionFactory connectionFactory){
     this.connectionFactory = connectionFactory;
+  }
+
+  public boolean isValidConnection() {
+    return (validConnection == true);
+  }
+
+  public void validateConnection() {
+    this.validConnection = true;
+  }
+
+  public void invalidateConnection(){
+    this.validConnection = false;
   }
 
   public void createConnection() throws JMSException {
