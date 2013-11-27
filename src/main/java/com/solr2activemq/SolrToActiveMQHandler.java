@@ -5,6 +5,7 @@ import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.handler.component.SearchHandler;
 import org.apache.solr.request.SolrQueryRequest;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -28,5 +29,4 @@ public class SolrToActiveMQHandler extends SearchHandler {
       throw e;
     }
   }
-
 }
