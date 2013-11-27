@@ -6,6 +6,7 @@ package com.solr2activemq.pojos;
  */
 public class ExceptionSolrQuery extends SolrQuery{
   private String stackTrace;
+  private String EXCEPTION ="exception";
 
   public ExceptionSolrQuery(String params, int hits, long qtime, String path, String webapp, String stackTrace){
     super(params,hits,qtime,path,webapp);
@@ -15,6 +16,8 @@ public class ExceptionSolrQuery extends SolrQuery{
   public ExceptionSolrQuery(SolrQuery solrQuery, String stackTrace){
     super(solrQuery.getParams(),solrQuery.getHits(),solrQuery.getQtime(), solrQuery.getPath(),solrQuery.getWebapp());
     this.stackTrace = stackTrace;
+    setMessageType(EXCEPTION);
+    setSource(this.getClass().getSimpleName());
   }
 
   public String getStackTrace() {

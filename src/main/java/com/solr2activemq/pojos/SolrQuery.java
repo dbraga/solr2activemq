@@ -5,7 +5,7 @@ import org.joda.time.DateTime;
 /**
  * User: dbraga - Date: 11/20/13
  */
-public class SolrQuery {
+public class SolrQuery extends Message {
 
   private String params;
   private int hits;
@@ -13,6 +13,7 @@ public class SolrQuery {
   private String path;
   private String webapp;
   private DateTime timestamp;
+  private static final String INFO = "info";
 
   public SolrQuery(String params, int hits, long qtime, String path, String webapp){
     this.params = params;
@@ -21,6 +22,8 @@ public class SolrQuery {
     this.path = path;
     this.webapp = webapp;
     this.timestamp = DateTime.now();
+    setMessageType(INFO);
+    setSource(this.getClass().getSimpleName());
   }
 
   public String getWebapp() {
