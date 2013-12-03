@@ -108,8 +108,12 @@ public class SolrToActiveMQComponent extends SearchComponent {
               message = createMessage(circularFifoBuffer.remove());
             }
           }
-          catch (InterruptedException e) {}
-          catch (BufferUnderflowException e) {}
+          catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+          catch (BufferUnderflowException e) {
+            // Some other thread stole the message .. continue
+          }
         }
         if (messagingSystem.isValidConnection() && message != null){
           try {

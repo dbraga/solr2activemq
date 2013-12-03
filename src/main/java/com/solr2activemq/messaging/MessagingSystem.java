@@ -30,7 +30,7 @@ public class MessagingSystem {
   }
 
   public boolean isValidConnection() {
-    return (validConnection == true);
+    return this.validConnection;
   }
 
   public void validateConnection() {
