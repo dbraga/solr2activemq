@@ -160,7 +160,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
   public static TextMessage createMessage(Object pojo){
     TextMessage msg = null;
     try {
-      if (pojo != null) {
+      if (pojo != null && messagingSystem.isValidConnection()) {
         msg = addMessageProperties(messagingSystem.getSession().createTextMessage(
                 mapper.writeValueAsString(pojo)),
                 ((Message)pojo).getMessageType()
