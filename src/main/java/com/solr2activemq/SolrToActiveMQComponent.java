@@ -57,6 +57,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
 
   /**
    * Add message properties to an existing TextMessage
+   *
    * @param message an existing TextMessage
    * @param msgType type of message if exception or information
    * @return
@@ -74,8 +75,8 @@ public class SolrToActiveMQComponent extends SearchComponent {
   /**
    * Creates a new connection and a new session to activeMQ
    */
-  public void bootstrapMessagingSystem(){
-    try{
+  public void bootstrapMessagingSystem() {
+    try {
       messagingSystem = new MessagingSystem(ACTIVEMQ_BROKER_URI, ACTIVEMQ_BROKER_PORT);
       messagingSystem.createConnection();
       messagingSystem.createSession();
@@ -84,8 +85,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
       messagingSystem.createProducer();
       System.out.println("SolrToActiveMQComponent: Bootstrapping messaging system done.");
       messagingSystem.validateConnection();
-    }
-    catch (JMSException e){
+    } catch (JMSException e) {
       System.out.println("SolrToActiveMQComponent: Bootstrapping messaging system failed.\n" + e);
       messagingSystem.invalidateConnection();
     }
@@ -94,12 +94,12 @@ public class SolrToActiveMQComponent extends SearchComponent {
   /**
    * Dequeue all messages in the buffer if not empty and enqueue them to the activeMQ destination
    */
-  class DequeueFromBuffer extends Thread{
+  class DequeueFromBuffer extends Thread {
     @Override
     public void run() {
       TextMessage message = null;
-      while(true){
-        synchronized (circularFifoBuffer){
+      while (true) {
+        synchronized (circularFifoBuffer) {
           try {
             while (circularFifoBuffer.isEmpty()) {
               circularFifoBuffer.wait();
@@ -107,15 +107,13 @@ public class SolrToActiveMQComponent extends SearchComponent {
             if (messagingSystem.isValidConnection()) { // Dequeing from the buffer only if i can send the message right after
               message = createMessage(circularFifoBuffer.remove());
             }
-          }
-          catch (InterruptedException e) {
+          } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-          }
-          catch (BufferUnderflowException e) {
+          } catch (BufferUnderflowException e) {
             // Some other thread stole the message .. continue
           }
         }
-        if (messagingSystem.isValidConnection() && message != null){
+        if (messagingSystem.isValidConnection() && message != null) {
           try {
             messagingSystem.sendMessage(message);
           } catch (JMSException e) {
@@ -123,9 +121,9 @@ public class SolrToActiveMQComponent extends SearchComponent {
             messagingSystem.invalidateConnection();
           }
         }
+      }
     }
   }
-}
 
   /**
    * Check if activeMQ connection or session needs bootstrap
@@ -134,19 +132,18 @@ public class SolrToActiveMQComponent extends SearchComponent {
     @Override
     public void run() {
       // Wake up and check if activeMQ connection needs to be bootstrapped
-      if (!messagingSystem.isValidConnection()){
+      if (!messagingSystem.isValidConnection()) {
         bootstrapMessagingSystem();
       }
     }
   }
 
   /**
-   *
    * @param pojo add a pojo message to the buffer and notify the dequeuers of the presence of a new message
    */
-  public static void addMessageToBuffer(Object pojo){
+  public static void addMessageToBuffer(Object pojo) {
     if (pojo != null) {
-      synchronized(circularFifoBuffer){
+      synchronized (circularFifoBuffer) {
         circularFifoBuffer.add(pojo);
         circularFifoBuffer.notify();
       }
@@ -155,32 +152,30 @@ public class SolrToActiveMQComponent extends SearchComponent {
 
 
   /**
-  * Create a text message from a pojo
-  *
-  * @param pojo representation of the message
-  * @return a text message
-  */
-  private TextMessage createMessage(Object pojo){
+   * Create a text message from a pojo
+   *
+   * @param pojo representation of the message
+   * @return a text message
+   */
+  private TextMessage createMessage(Object pojo) {
     TextMessage msg = null;
     try {
       if (pojo != null && messagingSystem.isValidConnection()) {
         msg = addMessageProperties(messagingSystem.getSession().createTextMessage(
                 mapper.writeValueAsString(pojo)),
-                ((Message)pojo).getMessageType()
+                ((Message) pojo).getMessageType()
         );
       }
-    } catch (Exception e){
+    } catch (Exception e) {
       messagingSystem.invalidateConnection();
-    }
-    finally {
+    } finally {
       return msg;
     }
   }
 
 
   @Override
-  public void init( NamedList args )
-  {
+  public void init(NamedList args) {
     this.initArgs = SolrParams.toSolrParams(args);
     // Retrieve configuration
 
@@ -218,8 +213,8 @@ public class SolrToActiveMQComponent extends SearchComponent {
     circularFifoBuffer = new CircularFifoBuffer(BUFFER_SIZE);
     bootstrapMessagingSystem();
     ExecutorService pool = Executors.newFixedThreadPool(4);
-    for (int i=0;i< DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE;i++){
-      pool.submit(new DequeueFromBuffer(),false);
+    for (int i = 0; i < DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE; i++) {
+      pool.submit(new DequeueFromBuffer(), false);
     }
     pool.shutdown();
     checkActiveMQTimer.schedule(new CheckIfActiveMQNeedsBootstrap(), 0, CHECK_ACTIVEMQ__POLLING);
@@ -227,7 +222,8 @@ public class SolrToActiveMQComponent extends SearchComponent {
 
 
   @Override
-  public void prepare(ResponseBuilder rb) throws IOException {}
+  public void prepare(ResponseBuilder rb) throws IOException {
+  }
 
 
   @Override
@@ -237,16 +233,16 @@ public class SolrToActiveMQComponent extends SearchComponent {
     SolrDocumentList solrDocumentList = null;
 
     if (rb.rsp.getException() == null) { // response did not generate an exception
-        solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(),  new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
+      solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(), new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
     }
 
     // Fetch information about the solr query
     SolrQuery solrQuery = new SolrQuery(
-              (rsp.getToLog().get("params") == null ) ? "" : (String)rsp.getToLog().get("params"),
-              (solrDocumentList == null ) ? 0 : (int) solrDocumentList.getNumFound(),
-              rsp.getEndTime()-req.getStartTime(),
-              (rsp.getToLog().get("path") == null ) ? "" : (String)rsp.getToLog().get("path"),
-              (rsp.getToLog().get("webapp") == null ) ? "" :(String)rsp.getToLog().get("webapp")
+            (rsp.getToLog().get("params") == null) ? "" : (String) rsp.getToLog().get("params"),
+            (solrDocumentList == null) ? 0 : (int) solrDocumentList.getNumFound(),
+            rsp.getEndTime() - req.getStartTime(),
+            (rsp.getToLog().get("path") == null) ? "" : (String) rsp.getToLog().get("path"),
+            (rsp.getToLog().get("webapp") == null) ? "" : (String) rsp.getToLog().get("webapp")
     );
     if (rb.rsp.getException() == null) { // response did not generate an exception
       addMessageToBuffer(solrQuery);
@@ -276,7 +272,6 @@ public class SolrToActiveMQComponent extends SearchComponent {
   public String getVersion() {
     return null;
   }
-
 
 
 }
