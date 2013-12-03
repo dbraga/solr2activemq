@@ -104,7 +104,6 @@ public class SolrToActiveMQComponent extends SearchComponent {
             while (circularFifoBuffer.isEmpty()) {
               circularFifoBuffer.wait();
             }
-            if (circularFifoBuffer.size() > 1000) System.out.println("Size of circular fifo buffer is :" + circularFifoBuffer.size());
             if (messagingSystem.isValidConnection()) { // Dequeing from the buffer only if i can send the message right after
               message = (TextMessage) circularFifoBuffer.remove();
             }
