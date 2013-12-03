@@ -19,7 +19,10 @@ public class MessagingSystem {
   private boolean validConnection;
 
   public MessagingSystem(String uri, int port){
-    this.connectionFactory =  new ActiveMQConnectionFactory("failover:(tcp://"+ uri + ":" + port+")");
+    this.connectionFactory =  new ActiveMQConnectionFactory("failover:(tcp://"+ uri + ":" + port+")?"+
+            "startupMaxReconnectAttempts=1" +
+            "&maxReconnectAttempts=1"+
+            "&maxReconnectDelay=100");
   }
 
   public MessagingSystem(ActiveMQConnectionFactory connectionFactory){
