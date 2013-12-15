@@ -4,12 +4,14 @@ import com.solr2activemq.messaging.MessagingSystem;
 import com.solr2activemq.pojos.ExceptionSolrQuery;
 import com.solr2activemq.pojos.Message;
 import com.solr2activemq.pojos.SolrQuery;
+import com.solr2activemq.pojos.SolrShardedQuery;
 import org.apache.commons.collections.BufferUnderflowException;
 import org.apache.commons.collections.buffer.CircularFifoBuffer;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SolrQueryRequest;
@@ -220,11 +222,42 @@ public class SolrToActiveMQComponent extends SearchComponent {
     checkActiveMQTimer.schedule(new CheckIfActiveMQNeedsBootstrap(), 0, CHECK_ACTIVEMQ__POLLING);
   }
 
-
-  @Override
-  public void prepare(ResponseBuilder rb) throws IOException {
+  private long getNumFoundFromShards(NamedList shardsInfo){
+    long numFound = 0;
+    if (shardsInfo != null) {
+        SimpleOrderedMap<Object> nl;
+      for (int i=0;i<shardsInfo.size(); i++){
+        nl = (SimpleOrderedMap<Object>)shardsInfo.getVal(i);
+        numFound += Long.valueOf(nl.get("numFound").toString());
+      }
+    } else numFound = 0;
+    return numFound;
   }
 
+  @Override
+  public void finishStage(ResponseBuilder rb) {
+    if (rb.stage == ResponseBuilder.STAGE_GET_FIELDS){  // last stage
+      // Fetch information about the solr query
+      SolrShardedQuery solrQuery = new SolrShardedQuery(
+              (rb.rsp.getToLog().get("params") == null) ? "" : (String) rb.rsp.getToLog().get("params"),
+              (int) getNumFoundFromShards(((NamedList)rb.rsp.getValues().get("shards.info"))),
+              rb.rsp.getEndTime() - rb.req.getStartTime(),
+              (rb.rsp.getToLog().get("path") == null) ? "" : (String) rb.rsp.getToLog().get("path"),
+              (rb.rsp.getToLog().get("webapp") == null) ? "" : (String) rb.rsp.getToLog().get("webapp"),
+              ((NamedList)rb.rsp.getValues().get("shards.info"))
+      );
+      if (rb.rsp.getException() == null) { // response did not generate an exception
+        addMessageToBuffer(solrQuery);
+      } else {
+        // The response generated an exception
+        ExceptionSolrQuery exceptionSolrQuery = new ExceptionSolrQuery(solrQuery, ExceptionUtils.getStackTrace(rb.rsp.getException()));
+        addMessageToBuffer(exceptionSolrQuery);
+      }
+    }
+  }
+
+  @Override
+  public void prepare(ResponseBuilder rb) throws IOException {}
 
   @Override
   public void process(ResponseBuilder rb) throws IOException {
