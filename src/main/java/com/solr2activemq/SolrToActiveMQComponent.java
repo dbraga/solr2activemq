@@ -4,12 +4,14 @@ import com.solr2activemq.messaging.MessagingSystem;
 import com.solr2activemq.pojos.ExceptionSolrQuery;
 import com.solr2activemq.pojos.Message;
 import com.solr2activemq.pojos.SolrQuery;
+import com.solr2activemq.pojos.SolrShardedQuery;
 import org.apache.commons.collections.BufferUnderflowException;
 import org.apache.commons.collections.buffer.CircularFifoBuffer;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
+import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SolrQueryRequest;
@@ -57,6 +59,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
 
   /**
    * Add message properties to an existing TextMessage
+   *
    * @param message an existing TextMessage
    * @param msgType type of message if exception or information
    * @return
@@ -105,13 +108,15 @@ public class SolrToActiveMQComponent extends SearchComponent {
               circularFifoBuffer.wait();
             }
             if (messagingSystem.isValidConnection()) { // Dequeing from the buffer only if i can send the message right after
-              message = (TextMessage) circularFifoBuffer.remove();
+              message = createMessage(circularFifoBuffer.remove());
             }
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          } catch (BufferUnderflowException e) {
+            // Some other thread stole the message .. continue
           }
-          catch (InterruptedException e) {}
-          catch (BufferUnderflowException e) {}
         }
-        if (messagingSystem.isValidConnection()){
+        if (messagingSystem.isValidConnection() && message != null) {
           try {
             messagingSystem.sendMessage(message);
           } catch (JMSException e) {
@@ -137,19 +142,17 @@ public class SolrToActiveMQComponent extends SearchComponent {
   }
 
   /**
-   * add a text message to the internal circular fifo buffer
-   *
-   * @param msg a text message
+   * @param pojo add a pojo message to the buffer and notify the dequeuers of the presence of a new message
    */
-  public static void addMessageToBuffer(TextMessage msg){
-    if (msg != null) {
-      // Add the message to the buffer
+  public static void addMessageToBuffer(Object pojo) {
+    if (pojo != null) {
       synchronized(circularFifoBuffer){
-        circularFifoBuffer.add(msg);
+        circularFifoBuffer.add(pojo);
         circularFifoBuffer.notify();
       }
     }
   }
+
 
   /**
    * Create a text message from a pojo
@@ -157,10 +160,10 @@ public class SolrToActiveMQComponent extends SearchComponent {
    * @param pojo representation of the message
    * @return a text message
    */
-  public static TextMessage createMessage(Object pojo){
+  private TextMessage createMessage(Object pojo) {
     TextMessage msg = null;
     try {
-      if (pojo != null) {
+      if (pojo != null && messagingSystem.isValidConnection()) {
         msg = addMessageProperties(messagingSystem.getSession().createTextMessage(
                 mapper.writeValueAsString(pojo)),
                 ((Message)pojo).getMessageType()
@@ -218,25 +221,52 @@ public class SolrToActiveMQComponent extends SearchComponent {
     for (int i=0;i< DEQUEUING_FROM_BUFFER_THREAD_POOL_SIZE;i++){
       pool.submit(new DequeueFromBuffer(),false);
     }
-
     pool.shutdown();
-
-
     checkActiveMQTimer.schedule(new CheckIfActiveMQNeedsBootstrap(), 0, CHECK_ACTIVEMQ__POLLING);
   }
 
+  private long getNumFoundFromShards(NamedList shardsInfo){
+    long numFound = 0;
+    if (shardsInfo != null) {
+        SimpleOrderedMap<Object> nl;
+      for (int i=0;i<shardsInfo.size(); i++){
+        nl = (SimpleOrderedMap<Object>)shardsInfo.getVal(i);
+        numFound += Long.valueOf(nl.get("numFound").toString());
+      }
+    } else numFound = 0;
+    return numFound;
+  }
+
+  @Override
+  public void finishStage(ResponseBuilder rb) {
+    if (rb.stage == ResponseBuilder.STAGE_GET_FIELDS){  // last stage
+      // Fetch information about the solr query
+      SolrShardedQuery solrQuery = new SolrShardedQuery(
+              (rb.rsp.getToLog().get("params") == null) ? "" : (String) rb.rsp.getToLog().get("params"),
+              (int) getNumFoundFromShards(((NamedList)rb.rsp.getValues().get("shards.info"))),
+              rb.rsp.getEndTime() - rb.req.getStartTime(),
+              (rb.rsp.getToLog().get("path") == null) ? "" : (String) rb.rsp.getToLog().get("path"),
+              (rb.rsp.getToLog().get("webapp") == null) ? "" : (String) rb.rsp.getToLog().get("webapp"),
+              ((NamedList)rb.rsp.getValues().get("shards.info"))
+      );
+      if (rb.rsp.getException() == null) { // response did not generate an exception
+        addMessageToBuffer(solrQuery);
+      } else {
+        // The response generated an exception
+        ExceptionSolrQuery exceptionSolrQuery = new ExceptionSolrQuery(solrQuery, ExceptionUtils.getStackTrace(rb.rsp.getException()));
+        addMessageToBuffer(exceptionSolrQuery);
+      }
+    }
+  }
 
   @Override
   public void prepare(ResponseBuilder rb) throws IOException {}
-
 
   @Override
   public void process(ResponseBuilder rb) throws IOException {
     SolrQueryResponse rsp = rb.rsp;
     SolrQueryRequest req = rb.req;
     SolrDocumentList solrDocumentList = null;
-    TextMessage message;
-
 
     if (rb.rsp.getException() == null) { // response did not generate an exception
         solrDocumentList = docListToSolrDocumentList(rb.getResults().docList, rb.req.getSearcher(),  new HashSet<String>(), new HashMap(rb.getResults().docList.size()));
@@ -251,13 +281,12 @@ public class SolrToActiveMQComponent extends SearchComponent {
               (rsp.getToLog().get("webapp") == null ) ? "" :(String)rsp.getToLog().get("webapp")
     );
     if (rb.rsp.getException() == null) { // response did not generate an exception
-      message = createMessage(solrQuery);
+      addMessageToBuffer(solrQuery);
     } else {
       // The response generated an exception
       ExceptionSolrQuery exceptionSolrQuery = new ExceptionSolrQuery(solrQuery, ExceptionUtils.getStackTrace(rb.rsp.getException()));
-      message = createMessage(exceptionSolrQuery);
+      addMessageToBuffer(exceptionSolrQuery);
     }
-    addMessageToBuffer(message);
   }
 
   @Override
@@ -279,7 +308,6 @@ public class SolrToActiveMQComponent extends SearchComponent {
   public String getVersion() {
     return null;
   }
-
 
 
 }
