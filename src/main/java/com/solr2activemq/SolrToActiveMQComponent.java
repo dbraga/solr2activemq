@@ -247,7 +247,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
               rb.rsp.getEndTime() - rb.req.getStartTime(),
               (rb.rsp.getToLog().get("path") == null) ? "" : (String) rb.rsp.getToLog().get("path"),
               (rb.rsp.getToLog().get("webapp") == null) ? "" : (String) rb.rsp.getToLog().get("webapp"),
-              ((NamedList)rb.rsp.getValues().get("shards.info"))
+              (rb.rsp.getValues().get("shards.info").toString())
       );
       if (rb.rsp.getException() == null) { // response did not generate an exception
         addMessageToBuffer(solrQuery);
