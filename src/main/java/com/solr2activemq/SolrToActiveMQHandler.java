@@ -14,7 +14,7 @@ import java.util.List;
  */
 public class SolrToActiveMQHandler extends SearchHandler {
 
-  public void handleRequestBody(SolrQueryRequest req, org.apache.solr.response.SolrQueryResponse rsp) throws Exception, ParseException, InstantiationException, IllegalAccessException {
+  public void handleRequestBody(SolrQueryRequest req, org.apache.solr.request.SolrQueryResponse rsp) throws Exception, ParseException, InstantiationException, IllegalAccessException {
     try {
       super.handleRequestBody(req,rsp);
     }
@@ -23,7 +23,10 @@ public class SolrToActiveMQHandler extends SearchHandler {
       SearchComponent solrToActiveMQComponent = new SolrToActiveMQComponent();
       List<SearchComponent> singleComponent = Arrays.asList(solrToActiveMQComponent);
       rsp.setException(e);
-      ResponseBuilder rb = new ResponseBuilder(req, rsp, singleComponent);
+      ResponseBuilder rb = new ResponseBuilder();
+      rb.req = req;
+      rb.rsp = rsp;
+      rb.components = singleComponent;
       solrToActiveMQComponent.process(rb);
       // Finally throw the exception
       throw e;

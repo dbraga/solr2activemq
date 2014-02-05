@@ -15,7 +15,7 @@ import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.response.SolrQueryResponse;
+import org.apache.solr.request.SolrQueryResponse;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import javax.jms.JMSException;
