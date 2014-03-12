@@ -6,7 +6,7 @@
 
     <groupId>solr2activemq</groupId>
     <artifactId>solr2activemq</artifactId>
-    <version>1.5</version>
+    <version>1.5.1</version>
     <properties>
         <solr.version>3.6.2</solr.version>
     </properties>
