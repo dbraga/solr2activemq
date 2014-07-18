@@ -257,13 +257,57 @@ public class SolrToActiveMQComponent extends SearchComponent {
   }
 
   @Override
-  public void prepare(ResponseBuilder rb) throws IOException {}
+  public void prepare(ResponseBuilder rb) throws IOException {
+    SolrQueryResponse rsp = rb.rsp;
+    SolrQueryRequest req = rb.req;
+    SolrDocumentList solrDocumentList = null;
+    if (rb.rsp.getException() == null) { // response did not generate an exception
+      if (!rb.grouping()){
+        solrDocumentList = docListToSolrDocumentList(
+                rb.getResults().docList,
+                rb.req.getSearcher(),
+                new HashSet<String>(),
+                new HashMap(rb.getResults().docList.size()));
+
+        // Fetch information about the solr query
+        SolrQuery solrQuery = new SolrQuery(
+                (rsp.getToLog().get("params") == null) ? "" : (String) rsp.getToLog().get("params"),
+                (solrDocumentList == null) ? 0 : (int) solrDocumentList.getNumFound(),
+                rsp.getEndTime() - req.getStartTime(),
+                (rsp.getToLog().get("path") == null) ? "" : (String) rsp.getToLog().get("path"),
+                (rsp.getToLog().get("webapp") == null) ? "" : (String) rsp.getToLog().get("webapp")
+        );
+
+        if (rb.rsp.getException() == null) { // response did not generate an exception
+          addMessageToBuffer(solrQuery);
+        } else {
+          // The response generated an exception
+          ExceptionSolrQuery exceptionSolrQuery = new ExceptionSolrQuery(solrQuery, ExceptionUtils.getStackTrace(rb.rsp.getException()));
+          addMessageToBuffer(exceptionSolrQuery);
+        }
+      }
+
+
+    }
+  }
 
   @Override
   public void process(ResponseBuilder rb) throws IOException {
     SolrQueryResponse rsp = rb.rsp;
     SolrQueryRequest req = rb.req;
     SolrDocumentList solrDocumentList = null;
+
+
+
+    // Fetch information about the solr query
+    SolrQuery solrQuery = new SolrQuery(
+            (rsp.getToLog().get("params") == null) ? "" : (String) rsp.getToLog().get("params"),
+            (solrDocumentList == null) ? 0 : (int) solrDocumentList.getNumFound(),
+            rsp.getEndTime() - req.getStartTime(),
+            (rsp.getToLog().get("path") == null) ? "" : (String) rsp.getToLog().get("path"),
+            (rsp.getToLog().get("webapp") == null) ? "" : (String) rsp.getToLog().get("webapp")
+    );
+
     if (rb.rsp.getException() == null) { // response did not generate an exception
       if (!rb.grouping()){
           solrDocumentList = docListToSolrDocumentList(
@@ -272,26 +316,20 @@ public class SolrToActiveMQComponent extends SearchComponent {
                   new HashSet<String>(),
                   new HashMap(rb.getResults().docList.size()));
 
-          // Fetch information about the solr query
-          SolrQuery solrQuery = new SolrQuery(
-                  (rsp.getToLog().get("params") == null) ? "" : (String) rsp.getToLog().get("params"),
-                  (solrDocumentList == null) ? 0 : (int) solrDocumentList.getNumFound(),
-                  rsp.getEndTime() - req.getStartTime(),
-                  (rsp.getToLog().get("path") == null) ? "" : (String) rsp.getToLog().get("path"),
-                  (rsp.getToLog().get("webapp") == null) ? "" : (String) rsp.getToLog().get("webapp")
-          );
 
-          if (rb.rsp.getException() == null) { // response did not generate an exception
+
             addMessageToBuffer(solrQuery);
-          } else {
+          }
+
+      } else {
             // The response generated an exception
             ExceptionSolrQuery exceptionSolrQuery = new ExceptionSolrQuery(solrQuery, ExceptionUtils.getStackTrace(rb.rsp.getException()));
             addMessageToBuffer(exceptionSolrQuery);
           }
-      }
 
 
-    }
+
+
 
 
   }
