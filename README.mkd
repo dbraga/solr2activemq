@@ -1,7 +1,7 @@
-# Solr 2 ActiveMQ
-An Apache Solr Handler and compoment capable of sending queries to an Apache ActiveMQ broker
+# Solr To ActiveMQ
+An Apache Solr Handler and component capable of sending solr requests to an Apache ActiveMQ broker
 ## Requirements
-* Apache Solr 3.6.2 [different versions will be supported soon ..]
+* Apache Solr [Supported versions 1.4 (branch -solr1), 3.x (Master) , 4.x (branch -solr4)] -  
 * ActiveMQ broker
 * Maven (>=2)
 
@@ -42,4 +42,4 @@ Move the solr2activemq-{version}-jar-with-dependencies.jar to your {SOLR_HOME}/l
 5. Create new Pull Request
 
 ## Author
-Developed by [Damiano Braga](https://github.com/dbraga)
+[Damiano Braga](https://github.com/dbraga)
