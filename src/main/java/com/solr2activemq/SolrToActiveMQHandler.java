@@ -1,6 +1,5 @@
 package com.solr2activemq;
 
-import org.apache.lucene.queryParser.ParseException;
 import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.handler.component.SearchHandler;
@@ -14,7 +13,7 @@ import java.util.List;
  */
 public class SolrToActiveMQHandler extends SearchHandler {
 
-  public void handleRequestBody(SolrQueryRequest req, org.apache.solr.response.SolrQueryResponse rsp) throws Exception, ParseException, InstantiationException, IllegalAccessException {
+  public void handleRequestBody(SolrQueryRequest req, org.apache.solr.response.SolrQueryResponse rsp) throws java.lang.Exception {
     try {
       super.handleRequestBody(req,rsp);
     }

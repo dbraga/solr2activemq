@@ -306,10 +306,7 @@ public class SolrToActiveMQComponent extends SearchComponent {
     return null;
   }
 
-  @Override
-  public String getSourceId() {
-    return null;
-  }
+
 
   @Override
   public String getSource() {
