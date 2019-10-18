@@ -8,7 +8,7 @@
     <artifactId>solr2activemq</artifactId>
     <version>0.0-SNAPSHOT</version>
     <properties>
-        <solr.version>3.6.2</solr.version>
+        <solr.version>8.2.0</solr.version>
     </properties>
     <dependencies>
         <dependency>
